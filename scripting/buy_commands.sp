@@ -1,8 +1,12 @@
 #pragma semicolon 1
 #include <sourcemod>
 #include <sdktools>
+#undef REQUIRE_PLUGIN
+#include <zombiereloaded>
+
+new bool:g_bZombieMode = false;
  
-#define DATA "1.0"
+#define DATA "1.1"
 
 Handle array_weapons, array_commands, array_prices;
 
@@ -14,6 +18,12 @@ public Plugin:myinfo =
 	version = DATA,
 	url = "http://steamcommunity.com/id/franug"
 };
+
+public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
+{
+	MarkNativeAsOptional("ZR_IsClientHuman");
+	return APLRes_Success;
+}
  
 public OnPluginStart()
 {
@@ -24,6 +34,21 @@ public OnPluginStart()
 	array_commands = CreateArray(124);
 	array_weapons = CreateArray(64);
 	array_prices = CreateArray();
+	
+	if(LibraryExists("zombiereloaded")) g_bZombieMode = true;
+	else g_bZombieMode = false;
+}
+
+public OnLibraryAdded(const String:name[])
+{
+	if(strcmp(name, "zombiereloaded")==0)
+		g_bZombieMode = true;
+}
+
+public OnLibraryRemoved(const String:name[])
+{
+	if(strcmp(name, "zombiereloaded")==0)
+		g_bZombieMode = false;
 }
 
 public OnMapStart()
@@ -78,14 +103,29 @@ public Action:SayC(client,const char[] command, args)
 	
 	if(money >= cost)
 	{
+		if(GetClientTeam(client) < 2)
+		{
+			PrintToChat(client, " \x04You need to be in a team for buy weapons");
+			return;
+		}
+		if(!IsPlayerAlive(client))
+		{
+			PrintToChat(client, " \x04You need to be alive for buy weapons");
+			return;
+		}
+		if(g_bZombieMode && !ZR_IsClientHuman(client))
+		{
+			PrintToChat(client, " \x04You need to be human for buy weapons");
+			return;
+		}
 		
 		SetEntProp(client, Prop_Send, "m_iAccount", money-cost);
 		char weapons[64];
 		GetArrayString(array_weapons, index, weapons, 64);
 		GivePlayerItem(client, weapons);
-		PrintToChat(client, "You buy a %s", weapons);
+		PrintToChat(client, " \x04You buy a %s", weapons);
 		
 	}
-	else PrintToChat(client, "You dont have enought money. You need %i", cost);
+	else PrintToChat(client, " \x04You dont have enought money. You need %i", cost);
 
 }
