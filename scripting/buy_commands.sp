@@ -1,14 +1,16 @@
 #pragma semicolon 1
 #include <sourcemod>
 #include <sdktools>
+#include <sdkhooks>
 #undef REQUIRE_PLUGIN
 #include <zombiereloaded>
 
 new bool:g_bZombieMode = false;
  
-#define DATA "1.1"
+#define DATA "2.0"
 
-Handle array_weapons, array_commands, array_prices;
+char sConfig[PLATFORM_MAX_PATH];
+Handle kv, trie_weapons[MAXPLAYERS + 1];
 
 public Plugin:myinfo =
 {
@@ -31,12 +33,27 @@ public OnPluginStart()
 	AddCommandListener(SayC, "say");
 	AddCommandListener(SayC, "say_team");
 	
-	array_commands = CreateArray(124);
-	array_weapons = CreateArray(64);
-	array_prices = CreateArray();
+	HookEvent("player_spawn", PlayerSpawn);
 	
 	if(LibraryExists("zombiereloaded")) g_bZombieMode = true;
 	else g_bZombieMode = false;
+}
+
+public Action:PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
+{
+	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	
+	ClearTrie(trie_weapons[client]);
+}
+
+public OnClientConnected(client)
+{
+	trie_weapons[client] = CreateTrie();
+}
+
+public OnClientDisconnect(client)
+{
+	if(trie_weapons[client] != INVALID_HANDLE) CloseHandle(trie_weapons[client]);
 }
 
 public OnLibraryAdded(const String:name[])
@@ -53,37 +70,17 @@ public OnLibraryRemoved(const String:name[])
 
 public OnMapStart()
 {
-	ClearArray(array_weapons);
-	ClearArray(array_commands);
-	ClearArray(array_prices);
-	
-	new String:path[PLATFORM_MAX_PATH];
-	BuildPath(PathType:Path_SM, path, sizeof(path), "configs/franug_buybycommands.txt");
-	
-	new Handle:file = OpenFile(path, "r");
-	if(file == INVALID_HANDLE)
-	{
-		SetFailState("Unable to read file %s", path);
-	}
-	
-	new String:line[256];
-	new String:bit[3][256];
+	RefreshKV();
+}
 
-	while(!IsEndOfFile(file) && ReadFileLine(file, line, sizeof(line)))
-	{
-		if (line[0] == ';' || IsCharSpace(line[0]))
-		{
-			continue;
-		}
-		
-		ExplodeString(line, ";", bit, 3, 256);
-
-		PushArrayString(array_commands, bit[0]);
-		PushArrayString(array_weapons, bit[1]);
-		PushArrayCell(array_prices, StringToInt(bit[2]));
-	}
+public void RefreshKV()
+{
+	BuildPath(Path_SM, sConfig, PLATFORM_MAX_PATH, "configs/franug_buybycommands.txt");
 	
-	CloseHandle(file);
+	if(kv != INVALID_HANDLE) CloseHandle(kv);
+	
+	kv = CreateKeyValues("BuyCommands");
+	FileToKeyValues(kv, sConfig);
 }
 
 public Action:SayC(client,const char[] command, args)
@@ -94,12 +91,11 @@ public Action:SayC(client,const char[] command, args)
 	GetCmdArgString(buffer,sizeof(buffer));
 	StripQuotes(buffer);
 	
-	int index = FindStringInArray(array_commands, buffer);
-	
-	if (index == -1)return;
+	KvRewind(kv);
+	if (!KvJumpToKey(kv, buffer))return;
 	
 	int money = GetEntProp(client, Prop_Send, "m_iAccount");
-	int cost = GetArrayCell(array_prices, index);
+	int cost = KvGetNum(kv, "price");
 	
 	if(money >= cost)
 	{
@@ -119,12 +115,46 @@ public Action:SayC(client,const char[] command, args)
 			return;
 		}
 		
-		SetEntProp(client, Prop_Send, "m_iAccount", money-cost);
 		char weapons[64];
-		GetArrayString(array_weapons, index, weapons, 64);
-		GivePlayerItem(client, weapons);
-		PrintToChat(client, " \x04You buy a %s", weapons);
+		KvGetString(kv, "weapon", weapons, 64);
+		int times = KvGetNum(kv, "times");
+		int current;
 		
+		if(times == 0)
+		{
+			int drop = KvGetNum(kv, "slot", -1);
+			if(drop != -1)		
+			{
+				int weapon = GetPlayerWeaponSlot(client, drop);
+				if(weapon != -1) SDKHooks_DropWeapon(client, weapon);
+			}
+			
+			GivePlayerItem(client, weapons);
+			SetEntProp(client, Prop_Send, "m_iAccount", money-cost);
+			PrintToChat(client, " \x04You have bought a %s", weapons);
+			return;
+		}
+		
+		if (!GetTrieValue(trie_weapons[client], weapons, current))current = 0;
+		
+		if(times <= current)
+		{
+			PrintToChat(client, " \x04You cant buy more %s this round", weapons);
+			return;
+		
+		}
+		SetTrieValue(trie_weapons[client], weapons, ++current);
+		
+		int drop = KvGetNum(kv, "slot", -1);
+		if(drop != -1)		
+		{
+			int weapon = GetPlayerWeaponSlot(client, drop);
+			if(weapon != -1) SDKHooks_DropWeapon(client, weapon);
+		}
+		
+		GivePlayerItem(client, weapons);
+		SetEntProp(client, Prop_Send, "m_iAccount", money-cost);
+		PrintToChat(client, " \x04You have bought a %s %i/%i", weapons, current, times);
 	}
 	else PrintToChat(client, " \x04You dont have enought money. You need %i", cost);
 

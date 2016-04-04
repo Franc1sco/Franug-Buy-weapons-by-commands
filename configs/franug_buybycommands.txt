@@ -1,9 +1,27 @@
-;Add weapons in this file
-;
-;Example >>>>>>>>>> commandtouseinchat;weaponname;price
-;
-;
+"BuyCommands"
+{
+	"!he" // the command to use in chat
+	{
+		"weapon" "weapon_hegrenade" // weapon name
+		"price" "5000" // weapon price
+		"times" "2" // number of times that you can buy this weapon in the round
+	}
+	"!smoke"
+	{
+		"weapon" "weapon_smokegrenade"
+		"price" "10000"
+		"times" "2"
+	}
+	"!m4a1"
+	{
+		"weapon" "weapon_m4a1"
+		"price" "1200"
+		"slot" "0" 
 
-!he;weapon_hegrenade;5000
-!smoke;weapon_smokegrenade;10000
-!m4a1;weapon_m4a1;1200
+		// slot tutorial
+		//
+		// 0 = primary weapon
+		// 1 = secondary weapon = pistols
+		//
+	}
+}
