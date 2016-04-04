@@ -4,10 +4,8 @@
 #include <sdkhooks>
 #undef REQUIRE_PLUGIN
 #include <zombiereloaded>
-
-new bool:g_bZombieMode = false;
  
-#define DATA "2.0"
+#define DATA "2.1"
 
 char sConfig[PLATFORM_MAX_PATH];
 Handle kv, trie_weapons[MAXPLAYERS + 1];
@@ -23,7 +21,7 @@ public Plugin:myinfo =
 
 public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 {
-	MarkNativeAsOptional("ZR_IsClientHuman");
+	MarkNativeAsOptional("ZR_IsClientZombie");
 	return APLRes_Success;
 }
  
@@ -35,8 +33,13 @@ public OnPluginStart()
 	
 	HookEvent("player_spawn", PlayerSpawn);
 	
-	if(LibraryExists("zombiereloaded")) g_bZombieMode = true;
-	else g_bZombieMode = false;
+	for(new client = 1; client <= MaxClients; client++)
+	{
+		if(IsClientInGame(client))
+		{
+			OnClientConnected(client);
+		}
+	}
 }
 
 public Action:PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
@@ -54,18 +57,6 @@ public OnClientConnected(client)
 public OnClientDisconnect(client)
 {
 	if(trie_weapons[client] != INVALID_HANDLE) CloseHandle(trie_weapons[client]);
-}
-
-public OnLibraryAdded(const String:name[])
-{
-	if(strcmp(name, "zombiereloaded")==0)
-		g_bZombieMode = true;
-}
-
-public OnLibraryRemoved(const String:name[])
-{
-	if(strcmp(name, "zombiereloaded")==0)
-		g_bZombieMode = false;
 }
 
 public OnMapStart()
@@ -109,7 +100,7 @@ public Action:SayC(client,const char[] command, args)
 			PrintToChat(client, " \x04You need to be alive for buy weapons");
 			return;
 		}
-		if(g_bZombieMode && !ZR_IsClientHuman(client))
+		if ((GetFeatureStatus(FeatureType_Native, "ZR_IsClientZombie") == FeatureStatus_Available) && ZR_IsClientZombie(client))
 		{
 			PrintToChat(client, " \x04You need to be human for buy weapons");
 			return;
