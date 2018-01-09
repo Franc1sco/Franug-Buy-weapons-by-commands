@@ -22,7 +22,7 @@
 #undef REQUIRE_PLUGIN
 #include <zombiereloaded>
  
-#define DATA "2.1"
+#define DATA "2.1.1"
 
 char sConfig[PLATFORM_MAX_PATH];
 Handle kv, trie_weapons[MAXPLAYERS + 1];
@@ -44,7 +44,7 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
  
 public OnPluginStart()
 {
-	CreateConVar("sm_buybycommands_version", DATA, "", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
+	CreateConVar("sm_buybycommands_version", DATA, "", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 	AddCommandListener(SayC, "say");
 	AddCommandListener(SayC, "say_team");
 	
@@ -93,11 +93,13 @@ public void RefreshKV()
 
 public Action:SayC(client,const char[] command, args)
 {
-	if (client == 0)return;
+	if (!IsValidClient(client))return;
 	
 	decl String:buffer[255];
 	GetCmdArgString(buffer,sizeof(buffer));
 	StripQuotes(buffer);
+	
+	if (kv == INVALID_HANDLE)RefreshKV();
 	
 	KvRewind(kv);
 	if (!KvJumpToKey(kv, buffer))return;
@@ -166,4 +168,13 @@ public Action:SayC(client,const char[] command, args)
 	}
 	else PrintToChat(client, " \x04You dont have enought money. You need %i", cost);
 
+}
+
+stock bool IsValidClient(int client, bool bAllowBots = false, bool bAllowDead = true)
+{
+	if (!(1 <= client <= MaxClients) || !IsClientInGame(client) || (IsFakeClient(client) && !bAllowBots) || IsClientSourceTV(client) || IsClientReplay(client) || (!bAllowDead && !IsPlayerAlive(client)))
+	{
+		return false;
+	}
+	return true;
 }
