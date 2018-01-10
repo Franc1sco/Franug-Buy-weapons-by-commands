@@ -22,7 +22,7 @@
 #undef REQUIRE_PLUGIN
 #include <zombiereloaded>
  
-#define DATA "2.1.1"
+#define DATA "2.1.2"
 
 char sConfig[PLATFORM_MAX_PATH];
 Handle kv, trie_weapons[MAXPLAYERS + 1];
@@ -98,6 +98,8 @@ public Action:SayC(client,const char[] command, args)
 	decl String:buffer[255];
 	GetCmdArgString(buffer,sizeof(buffer));
 	StripQuotes(buffer);
+	
+	if (strlen(buffer) < 1)return;
 	
 	if (kv == INVALID_HANDLE)RefreshKV();
 	
