@@ -21,13 +21,15 @@
 #include <sdkhooks>
 #undef REQUIRE_PLUGIN
 #include <zombiereloaded>
- 
-#define DATA "2.1.2"
+
+#pragma newdecls required
+
+#define DATA "2.2"
 
 char sConfig[PLATFORM_MAX_PATH];
 Handle kv, trie_weapons[MAXPLAYERS + 1];
 
-public Plugin:myinfo =
+public Plugin myinfo =
 {
 	name = "SM Buy weapons by commands",
 	description = "",
@@ -36,13 +38,13 @@ public Plugin:myinfo =
 	url = "http://steamcommunity.com/id/franug"
 };
 
-public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	MarkNativeAsOptional("ZR_IsClientZombie");
 	return APLRes_Success;
 }
  
-public OnPluginStart()
+public void OnPluginStart()
 {
 	CreateConVar("sm_buybycommands_version", DATA, "", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 	AddCommandListener(SayC, "say");
@@ -50,7 +52,7 @@ public OnPluginStart()
 	
 	HookEvent("player_spawn", PlayerSpawn);
 	
-	for(new client = 1; client <= MaxClients; client++)
+	for(int client = 1; client <= MaxClients; client++)
 	{
 		if(IsClientInGame(client))
 		{
@@ -59,24 +61,24 @@ public OnPluginStart()
 	}
 }
 
-public Action:PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
+public Action PlayerSpawn(Handle event, const char[] name, bool dontBroadcast)
 {
-	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	int client = GetClientOfUserId(GetEventInt(event, "userid"));
 	
 	ClearTrie(trie_weapons[client]);
 }
 
-public OnClientConnected(client)
+public void OnClientConnected(int client)
 {
 	trie_weapons[client] = CreateTrie();
 }
 
-public OnClientDisconnect(client)
+public void OnClientDisconnect(int client)
 {
 	if(trie_weapons[client] != INVALID_HANDLE) CloseHandle(trie_weapons[client]);
 }
 
-public OnMapStart()
+public void OnMapStart()
 {
 	RefreshKV();
 }
@@ -91,11 +93,11 @@ public void RefreshKV()
 	FileToKeyValues(kv, sConfig);
 }
 
-public Action:SayC(client,const char[] command, args)
+public Action SayC(int client, const char[] command, int args)
 {
 	if (!IsValidClient(client))return;
 	
-	decl String:buffer[255];
+	char buffer[255];
 	GetCmdArgString(buffer,sizeof(buffer));
 	StripQuotes(buffer);
 	
@@ -105,6 +107,15 @@ public Action:SayC(client,const char[] command, args)
 	
 	KvRewind(kv);
 	if (!KvJumpToKey(kv, buffer))return;
+	
+	char flags[24];
+	KvGetString(kv, "flags", flags, sizeof(flags), "public");
+	
+	if(!StrEqual(flags, "public", false) && !CheckAdminFlagsByString(client, flags))
+	{
+		PrintToChat(client, " \x04You dont have access to buy this weapon");
+		return;
+	}
 	
 	int money = GetEntProp(client, Prop_Send, "m_iAccount");
 	int cost = KvGetNum(kv, "price");
@@ -143,6 +154,7 @@ public Action:SayC(client,const char[] command, args)
 			
 			GivePlayerItem(client, weapons);
 			SetEntProp(client, Prop_Send, "m_iAccount", money-cost);
+			ReplaceString(weapons, sizeof(weapons), "weapon_", "");
 			PrintToChat(client, " \x04You have bought a %s", weapons);
 			return;
 		}
@@ -166,6 +178,8 @@ public Action:SayC(client,const char[] command, args)
 		
 		GivePlayerItem(client, weapons);
 		SetEntProp(client, Prop_Send, "m_iAccount", money-cost);
+		ReplaceString(weapons, sizeof(weapons), "weapon_", "");
+		
 		PrintToChat(client, " \x04You have bought a %s %i/%i", weapons, current, times);
 	}
 	else PrintToChat(client, " \x04You dont have enought money. You need %i", cost);
@@ -180,3 +194,27 @@ stock bool IsValidClient(int client, bool bAllowBots = false, bool bAllowDead = 
 	}
 	return true;
 }
+
+stock bool CheckAdminFlagsByString(int client, const char[] flagString)
+{
+    AdminId admin = view_as<AdminId>(GetUserAdmin(client));
+    if (admin != INVALID_ADMIN_ID){
+        int count, found, flags = ReadFlagString(flagString);
+        for (int i = 0; i <= 20; i++){
+            if (flags & (1<<i))
+            {
+                count++;
+
+                if(GetAdminFlag(admin, view_as<AdminFlag>(i))){
+                    found++;
+                }
+            }
+        }
+
+        if (count == found || GetUserFlagBits(client) & ADMFLAG_ROOT){
+            return true;
+        }
+    }
+
+    return false;
+}  

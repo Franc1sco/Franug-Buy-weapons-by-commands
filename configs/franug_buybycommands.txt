@@ -5,6 +5,7 @@
 		"weapon" "weapon_hegrenade" // weapon name
 		"price" "5000" // weapon price
 		"times" "2" // number of times that you can buy this weapon in the round
+		"flags" "bc" // admin flags required for buy this weapon. Public by default.
 	}
 	"!smoke"
 	{
